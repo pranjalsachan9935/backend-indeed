@@ -48,16 +48,70 @@ exports.registerUser = async (req, res) => {
 };
 
 
-// Get all users
-exports.getUsers = async (req, res) => {
+// Get all applicatios
+exports.getApplicantsList = async (req, res) => {
   try {
-    const users = await userModel.find();
-    if (!users || users.length === 0) {
-      return res.status(404).json({ msg: "No users found" });
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ msg: "Access denied. Admins only." });
     }
-    return res.status(200).json({ msg: "Users found", users });
+
+    const applicants = await jobModel
+      .find()
+      .populate({
+        path: "userId",
+        select: "-password",
+      })
+      .sort({ createdAt: -1 });
+
+    // Convert resume buffer to base64 URL
+    const applicantsWithBase64Resume = applicants.map((app) => {
+      const resumeBase64 = app.resume?.data
+        ? `data:${app.resume.contentType};base64,${app.resume.data.toString("base64")}`
+        : null;
+
+      return {
+        ...app.toObject(),
+        resume: resumeBase64,
+      };
+    });
+
+    res.status(200).json(applicantsWithBase64Resume);
   } catch (err) {
-    return res.status(500).json({ msg: "Server error" });
+    console.error(err);
+    res.status(500).json({ msg: "Internal Server Error" });
+  }
+};
+
+ 
+// To accept the job application
+exports.ToAcceptApplication = async (req, res) => {
+  try {
+    const updated = await jobModel
+      .findByIdAndUpdate(req.params.id, { status: "accepted" }, { new: true })
+      .select("status");
+    if (!updated) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+    res.json({ message: "Application accepted", application: updated });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "internal server error" });
+  }
+};
+ 
+// To reject the job application
+exports.ToRejectApplication = async (req, res) => {
+  try {
+    const updated = await jobModel
+      .findByIdAndUpdate(req.params.id, { status: "rejected" }, { new: true })
+      .select("status");
+    if (!updated) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+    res.json({ message: "Application accepted", application: updated });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "internal server error" });
   }
 };
 
